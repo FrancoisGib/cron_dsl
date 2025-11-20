@@ -6,8 +6,27 @@ version = 4
 name = "cron_dsl"
 version = "0.1.0"
 dependencies = [
+ "cronvalue",
+ "pastey",
  "thiserror",
 ]
+
+[[package]]
+name = "cronvalue"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad05c027718943fe8967d0353aa6d3ed1dab7f136aa35e094bcda04aaf4d3dbb"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "pastey"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57d6c094ee800037dff99e02cab0eaf3142826586742a270ab3d7a62656bd27a"
 
 [[package]]
 name = "proc-macro2"
