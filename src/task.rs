@@ -18,7 +18,7 @@ impl Display for CronTask {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "m{} h{} md{} m{} wd{} p{:?}",
+            "{} {} {} {} {} {:?}",
             self.minute, self.hour, self.month_day, self.month, self.week_day, self.path
         )
     }
