@@ -7,7 +7,11 @@ pub struct Cron {
 
 impl Cron {
     pub fn new() -> Self {
-        Self { tasks: vec![] }
+        Self::default()
+    }
+
+    pub fn add_task(&mut self, task: CronTask) {
+        self.tasks.push(task);
     }
 }
 
