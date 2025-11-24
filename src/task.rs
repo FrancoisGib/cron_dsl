@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use chrono::{DateTime, Datelike, Local, Timelike};
+
 use crate::{error::Result, value::CronValue};
 
 #[derive(Debug, Default)]
@@ -49,6 +51,14 @@ impl CronTask {
         self.month.verify_for_month()?;
         self.week_day.verify_for_week_day()?;
         Ok(())
+    }
+
+    pub fn matches(&self, date: DateTime<Local>) -> bool {
+        self.week_day.matches(date.weekday() as u8)
+        && self.month_day.matches(date.day() as u8)
+        && self.hour.matches(date.hour() as u8)
+        && self.month.matches(date.month() as u8)
+        && self.minute.matches(date.minute() as u8)
     }
 }
 

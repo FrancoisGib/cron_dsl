@@ -1,3 +1,5 @@
+use chrono::{DateTime, Local};
+
 use crate::task::CronTask;
 
 #[derive(Debug, Default)]
@@ -8,6 +10,10 @@ pub struct Cron {
 impl Cron {
     pub fn new() -> Self {
         Self { tasks: vec![] }
+    }
+
+    pub fn is_planified_at(&self, date: DateTime<Local>) -> bool {
+        self.into_iter().any(|task| task.matches(date))
     }
 }
 

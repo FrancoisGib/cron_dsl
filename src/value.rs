@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use cronvalue::FromTuple;
 
-use crate::error::{CronError, Result};
+use crate::{error::{CronError, Result}};
 
 #[derive(Debug, FromTuple)]
 pub enum CronValue {
@@ -191,7 +191,7 @@ impl CronValue {
             CronValue::Range(begin_ref, end_ref) => {
                 let begin = *begin_ref;
                 let end = *end_ref;
-                if begin > 0 && begin <= 7 && end > 0 && end <= 7 {
+                if begin < 7 && end < 7 {
                     Ok(())
                 } else {
                     Err(CronError::InvalidCronValue)
@@ -200,7 +200,7 @@ impl CronValue {
             CronValue::Interval(base, step_ref) => {
                 base.as_ref().verify()?;
                 let step = *step_ref;
-                if step > 0 && step <= 7 {
+                if step < 7 {
                     Ok(())
                 } else {
                     Err(CronError::InvalidCronValue)
@@ -208,7 +208,7 @@ impl CronValue {
             }
             CronValue::Value(v_ref) => {
                 let v = *v_ref;
-                if v > 0 && v <= 7 {
+                if v < 7 {
                     Ok(())
                 } else {
                     Err(CronError::InvalidCronValue)
@@ -237,6 +237,27 @@ impl CronValue {
                 .map(|v| v.verify())
                 .fold(Ok(()), |acc, v| if v.is_err() { v } else { acc }),
             _ => Ok(()),
+        }
+    }
+
+    pub fn matches(&self, value: u8) -> bool {
+        match self {
+            CronValue::Range(begin, end) => *begin <= value && *end >= value,
+            CronValue::Value(v) => *v == value,
+            CronValue::List(cron_values) => cron_values.iter().any(|v| v.matches(value)),
+            CronValue::Interval(cron_value, interval) => {
+                match cron_value.as_ref() {
+                    CronValue::All => true,
+                    CronValue::Range(begin, end) => {
+                        for v in (*begin..*end).step_by(*interval as usize) {
+                            if value == v { return true }
+                        }
+                        false
+                    }
+                    base => base.matches(value) && value % interval == 0,
+                }
+            }
+            CronValue::All => true,
         }
     }
 }
