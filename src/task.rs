@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, path::PathBuf};
 
 use crate::{error::Result, value::CronValue};
 
@@ -9,14 +9,15 @@ pub struct CronTask {
     month_day: CronValue,
     month: CronValue,
     week_day: CronValue,
+    path: PathBuf,
 }
 
 impl Display for CronTask {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} {} {} {} {}",
-            self.minute, self.hour, self.month_day, self.month, self.week_day
+            "{} {} {} {} {} {:?}",
+            self.minute, self.hour, self.month_day, self.month, self.week_day, self.path
         )
     }
 }
@@ -28,6 +29,7 @@ impl CronTask {
         month_day: CronValue,
         month: CronValue,
         week_day: CronValue,
+        path: PathBuf,
     ) -> Self {
         CronTask {
             minute,
@@ -35,6 +37,7 @@ impl CronTask {
             month_day,
             month,
             week_day,
+            path,
         }
     }
 
@@ -43,11 +46,12 @@ impl CronTask {
     }
 
     fn verify(&self) -> Result<()> {
-        self.minute.verify_for_minute()?;
-        self.hour.verify_for_hour()?;
-        self.month_day.verify_for_day()?;
-        self.month.verify_for_month()?;
-        self.week_day.verify_for_week_day()?;
+        // self.minute.verify_for_minute()?;
+        // self.hour.verify_for_hour()?;
+        // self.month_day.verify_for_day()?;
+        // self.month.verify_for_month()?;
+        // self.week_day.verify_for_week_day()?;
+        
         Ok(())
     }
 }
@@ -60,6 +64,7 @@ impl From<CronTaskBuilder> for CronTask {
             value.month_day,
             value.month,
             value.week_day,
+            value.path,
         )
     }
 }
@@ -71,6 +76,7 @@ pub struct CronTaskBuilder {
     month_day: CronValue,
     month: CronValue,
     week_day: CronValue,
+    path: PathBuf,
 }
 
 impl CronTaskBuilder {
@@ -99,8 +105,14 @@ impl CronTaskBuilder {
         self
     }
 
+    pub fn path(mut self, path: String) -> Self {
+        self.path = path.into();
+        self
+    }
+
     pub fn build(self) -> Result<CronTask> {
         let task = CronTask::from(self);
+
         task.verify().map(|_| task)
     }
 }
