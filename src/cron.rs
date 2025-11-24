@@ -15,6 +15,10 @@ impl Cron {
     pub fn is_planified_at(&self, date: DateTime<Local>) -> bool {
         self.into_iter().any(|task| task.matches(date))
     }
+
+    pub fn get_all_planified_at(&self, date: DateTime<Local>) -> Vec<&CronTask> {
+        self.into_iter().filter(|task| task.matches(date)).collect()
+    }
 }
 
 impl<'a> IntoIterator for &'a Cron {
