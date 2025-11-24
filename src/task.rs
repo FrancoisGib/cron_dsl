@@ -1,6 +1,6 @@
 use std::{fmt::Display, path::PathBuf};
 
-use chrono::{DateTime, Datelike, Local, Timelike};
+use chrono::{DateTime, Datelike, Local, Month, Timelike, Weekday};
 
 use crate::{error::Result, value::CronValue};
 
@@ -18,7 +18,7 @@ impl Display for CronTask {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} {} {} {} {} {:?}",
+            "m{} h{} md{} m{} wd{} p{:?}",
             self.minute, self.hour, self.month_day, self.month, self.week_day, self.path
         )
     }
@@ -48,11 +48,11 @@ impl CronTask {
     }
 
     fn verify(&self) -> Result<()> {
-        // self.minute.verify_for_minute()?;
-        // self.hour.verify_for_hour()?;
-        // self.month_day.verify_for_day()?;
-        // self.month.verify_for_month()?;
-        // self.week_day.verify_for_week_day()?;
+        self.minute.verify(0, 60)?;
+        self.hour.verify(0, 24)?;
+        self.month_day.verify(0, 31)?;
+        self.month.verify(0, 12)?;
+        self.week_day.verify(0, 6)?;
         
         Ok(())
     }
