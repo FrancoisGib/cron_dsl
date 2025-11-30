@@ -1,16 +1,14 @@
-use chrono::{Local, NaiveDateTime, TimeZone};
-
 use crate::{
     task::CronTask,
-    value::{interval, range},
+    value::{from, interval, on, range},
 };
 
+pub mod cron;
 pub mod error;
 pub mod task;
 pub mod value;
-pub mod cron;
 
-const FORMAT_NO_FRAC: &str = "%Y-%m-%d %H:%M:%S";
+// const FORMAT_NO_FRAC: &str = "%Y-%m-%d %H:%M:%S";
 
 fn main() {
     let cron_task = CronTask::builder()
@@ -21,14 +19,23 @@ fn main() {
         .build()
         .unwrap();
     println!("{}", cron_task);
-    
+
+    let t = CronTask::builder()
+        .minutes(from(10, 30).every(5))
+        .hour(on(5).and(18))
+        .build()
+        .unwrap();
+    println!("{}", t);
+
+    println!("next {}", t.next_occurrence());
+
     // let local_time = Local::now();
-    let date_str = "2025-11-24 15:43:07";
-    let date = Local.from_local_datetime(&NaiveDateTime::parse_from_str(&date_str, FORMAT_NO_FRAC).unwrap()).unwrap();
+    // let date_str = "2025-11-24 15:43:07";
+    // let date = Local
+    //     .from_local_datetime(&NaiveDateTime::parse_from_str(&date_str, FORMAT_NO_FRAC).unwrap())
+    //     .unwrap();
 
-    let matches = cron_task.matches(date);
+    // let matches = cron_task.matches(date);
 
-
-
-    println!("match {}", matches);
+    // println!("match {}", matches);
 }
