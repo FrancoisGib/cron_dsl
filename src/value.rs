@@ -1,14 +1,91 @@
+use std::{fmt::Display, ops::Range};
+
+use chrono::{Month, Weekday};
 use cronvalue::FromTuple;
-use std::fmt::Display;
 
 use crate::error::{CronError, Result};
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum ValueKind {
+    Day(Weekday),
+    Month(Month),
+    Number(u8),
+}
+
+impl Display for ValueKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Day(d) => write!(f, "{d}"),
+            Self::Month(m) => write!(f, "{m:?}"),
+            Self::Number(n) => write!(f, "{n}"),
+        }
+    }
+}
+
+impl From<Weekday> for ValueKind {
+    fn from(value: Weekday) -> Self {
+        Self::Day(value)
+    }
+}
+
+impl From<Month> for ValueKind {
+    fn from(value: Month) -> Self {
+        Self::Month(value)
+    }
+}
+
+impl From<u8> for ValueKind {
+    fn from(value: u8) -> Self {
+        Self::Number(value)
+    }
+}
+
+impl From<ValueKind> for u8 {
+    fn from(value: ValueKind) -> Self {
+        match value {
+            ValueKind::Day(d) => d as u8,
+            ValueKind::Month(m) => m as u8,
+            ValueKind::Number(n) => n as u8,
+        }
+    }
+}
+
+impl From<&ValueKind> for u8 {
+    fn from(value: &ValueKind) -> Self {
+        match value {
+            ValueKind::Day(d) => *d as u8,
+            ValueKind::Month(m) => *m as u8,
+            ValueKind::Number(n) => *n as u8,
+        }
+    }
+}
+
+impl From<ValueKind> for usize {
+    fn from(value: ValueKind) -> Self {
+        match value {
+            ValueKind::Day(d) => d as usize,
+            ValueKind::Month(m) => m as usize,
+            ValueKind::Number(n) => n as usize,
+        }
+    }
+}
+
+impl From<&ValueKind> for usize {
+    fn from(value: &ValueKind) -> Self {
+        match value {
+            ValueKind::Day(d) => *d as usize,
+            ValueKind::Month(m) => *m as usize,
+            ValueKind::Number(n) => *n as usize,
+        }
+    }
+}
+
 #[derive(Debug, FromTuple, Clone)]
 pub enum CronValue {
-    Range(u8, u8),
-    Value(u8),
+    Range(Range<u8>),
+    Value(ValueKind),
     List(Vec<CronValue>),
-    Interval(Box<CronValue>, u8),
+    Interval(Box<CronValue>, ValueKind),
     All,
 }
 
@@ -20,7 +97,7 @@ impl Default for CronValue {
 
 impl From<u8> for CronValue {
     fn from(value: u8) -> Self {
-        CronValue::Value(value)
+        CronValue::Value(value.into())
     }
 }
 
@@ -36,8 +113,8 @@ where
 impl Display for CronValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CronValue::Range(begin, end) => write!(f, "{}-{}", *begin, *end),
-            CronValue::Value(v) => write!(f, "{}", *v),
+            CronValue::Range(r) => write!(f, "{}-{}", r.start, r.end),
+            CronValue::Value(v) => v.fmt(f),
             CronValue::List(cron_values) => {
                 let fmt = cron_values
                     .iter()
@@ -49,6 +126,12 @@ impl Display for CronValue {
             CronValue::Interval(base, step) => write!(f, "{}/{}", base.as_ref().to_string(), step),
             CronValue::All => write!(f, "*"),
         }
+    }
+}
+
+impl From<Range<u8>> for CronValue {
+    fn from(value: Range<u8>) -> Self {
+        Self::Range(value)
     }
 }
 
@@ -65,7 +148,7 @@ impl CronValue {
 
     pub fn every<T: Into<CronValue>>(self, step: T) -> Self {
         match self {
-            CronValue::Range(_, _) | CronValue::All => match step.into() {
+            CronValue::Range(_) | CronValue::All => match step.into() {
                 CronValue::Value(v) => CronValue::Interval(Box::new(self), v),
                 _ => self,
             },
@@ -73,28 +156,28 @@ impl CronValue {
         }
     }
 
-    pub fn from(self, a: u8, b: u8) -> Self {
-        CronValue::Range(a, b).intersect(self)
+    pub fn from(self, r: Range<u8>) -> Self {
+        CronValue::Range(r).intersect(self)
     }
 
     fn intersect(self, other: Self) -> Self {
         match (self, other.clone()) {
-            (CronValue::Range(a1, b1), CronValue::Range(a2, b2)) => {
-                CronValue::Range(a1.max(a2), b1.min(b2))
+            (CronValue::Range(r1), CronValue::Range(r2)) => {
+                CronValue::Range(r1.start.max(r2.start)..r1.end.min(r2.end))
             }
 
-            (CronValue::Range(a, b), CronValue::Value(v))
-            | (CronValue::Value(v), CronValue::Range(a, b)) => {
-                if a <= v && v <= b {
+            (CronValue::Range(r), CronValue::Value(v))
+            | (CronValue::Value(v), CronValue::Range(r)) => {
+                if r.start <= u8::from(&v) && u8::from(&v) <= r.end {
                     CronValue::Value(v)
                 } else {
                     CronValue::List(vec![])
                 }
             }
 
-            (CronValue::Range(a, b), CronValue::List(list))
-            | (CronValue::List(list), CronValue::Range(a, b)) => {
-                CronValue::List(list.into_iter().filter(|v| v.matches_in(a, b)).collect())
+            (CronValue::Range(r), CronValue::List(list))
+            | (CronValue::List(list), CronValue::Range(r)) => {
+                CronValue::List(list.into_iter().filter(|v| v.matches_in(r.start, r.end)).collect())
             }
 
             _ => other, // all
@@ -103,8 +186,8 @@ impl CronValue {
 
     fn matches_in(&self, a: u8, b: u8) -> bool {
         match self {
-            CronValue::Value(v) => *v >= a && *v <= b,
-            CronValue::Range(start, end) => *start >= a && *end <= b,
+            CronValue::Value(v) => u8::from(v) >= a && u8::from(v) <= b,
+            CronValue::Range(r) => r.start >= a && r.end <= b,
             CronValue::List(vals) => vals.iter().all(|v| v.matches_in(a, b)),
             CronValue::All => true,
             CronValue::Interval(_, _) => panic!("matches_in() should not be used on Interval"),
@@ -112,25 +195,27 @@ impl CronValue {
     }
 
     pub fn verify_for_minute(&self) -> Result<()> {
-        self.verify()?;
+        self.verify(0, 60)?;
+
         match self {
-            CronValue::Range(begin, end) => {
-                if *begin < 60 && *end < 60 {
+            CronValue::Range(r) => {
+                if r.start < 60 && r.end < 60 {
                     Ok(())
                 } else {
                     Err(CronError::InvalidCronValue)
                 }
             }
             CronValue::Interval(base, step) => {
-                base.as_ref().verify()?;
-                if *step < 60 {
+                base.as_ref().verify(0, 60)?; // TODO
+
+                if u8::from(step) < 60 {
                     Ok(())
                 } else {
                     Err(CronError::InvalidCronValue)
                 }
             }
             CronValue::Value(v) => {
-                if *v < 60 {
+                if u8::from(v) < 60 {
                     Ok(())
                 } else {
                     Err(CronError::InvalidCronValue)
@@ -144,63 +229,28 @@ impl CronValue {
         }
     }
 
-    pub fn verify_for_hour(&self) -> Result<()> {
-        self.verify()?;
+    pub fn verify(&self, min: u8, max: u8) -> Result<()> {
         match self {
-            CronValue::Range(begin, end) => {
-                if *begin < 24 && *end < 24 {
+            CronValue::Range(r) => {
+                if r.start < r.end && r.start >= min && r.end <= max {
                     Ok(())
                 } else {
                     Err(CronError::InvalidCronValue)
                 }
             }
-            CronValue::Interval(base, step) => {
-                base.as_ref().verify()?;
-                if *step < 24 {
+            CronValue::Interval(_, v) => {
+                let v: u8 = v.into();
+
+                if v < max {
                     Ok(())
                 } else {
                     Err(CronError::InvalidCronValue)
                 }
             }
             CronValue::Value(v) => {
-                if *v < 24 {
-                    Ok(())
-                } else {
-                    Err(CronError::InvalidCronValue)
-                }
-            }
-            CronValue::List(l) => l
-                .iter()
-                .map(|v| v.verify_for_hour())
-                .fold(Ok(()), |acc, v| if v.is_err() { v } else { acc }),
-            _ => Ok(()),
-        }
-    }
+                let v: u8 = v.into();
 
-    pub fn verify_for_month(&self) -> Result<()> {
-        self.verify()?;
-        match self {
-            CronValue::Range(begin_ref, end_ref) => {
-                let begin = *begin_ref;
-                let end = *end_ref;
-                if begin > 0 && begin <= 12 && end > 0 && end <= 12 {
-                    Ok(())
-                } else {
-                    Err(CronError::InvalidCronValue)
-                }
-            }
-            CronValue::Interval(base, step_ref) => {
-                base.as_ref().verify()?;
-                let step = *step_ref;
-                if step > 0 && step <= 12 {
-                    Ok(())
-                } else {
-                    Err(CronError::InvalidCronValue)
-                }
-            }
-            CronValue::Value(v_ref) => {
-                let v = *v_ref;
-                if v > 0 && v <= 12 {
+                if v < max {
                     Ok(())
                 } else {
                     Err(CronError::InvalidCronValue)
@@ -208,99 +258,7 @@ impl CronValue {
             }
             CronValue::List(l) => l
                 .iter()
-                .map(|v| v.verify_for_month())
-                .fold(Ok(()), |acc, v| if v.is_err() { v } else { acc }),
-            _ => Ok(()),
-        }
-    }
-
-    pub fn verify_for_day(&self) -> Result<()> {
-        self.verify()?;
-        match self {
-            CronValue::Range(begin_ref, end_ref) => {
-                let begin = *begin_ref;
-                let end = *end_ref;
-                if begin > 0 && begin <= 31 && end > 0 && end <= 31 {
-                    Ok(())
-                } else {
-                    Err(CronError::InvalidCronValue)
-                }
-            }
-            CronValue::Interval(base, step_ref) => {
-                base.as_ref().verify()?;
-                let step = *step_ref;
-                if step > 0 && step <= 31 {
-                    Ok(())
-                } else {
-                    Err(CronError::InvalidCronValue)
-                }
-            }
-            CronValue::Value(v_ref) => {
-                let v = *v_ref;
-                if v > 0 && v <= 31 {
-                    Ok(())
-                } else {
-                    Err(CronError::InvalidCronValue)
-                }
-            }
-            CronValue::List(l) => l
-                .iter()
-                .map(|v| v.verify_for_day())
-                .fold(Ok(()), |acc, v| if v.is_err() { v } else { acc }),
-            _ => Ok(()),
-        }
-    }
-
-    pub fn verify_for_week_day(&self) -> Result<()> {
-        self.verify()?;
-        match self {
-            CronValue::Range(begin_ref, end_ref) => {
-                let begin = *begin_ref;
-                let end = *end_ref;
-                if begin < 7 && end < 7 {
-                    Ok(())
-                } else {
-                    Err(CronError::InvalidCronValue)
-                }
-            }
-            CronValue::Interval(base, step_ref) => {
-                base.as_ref().verify()?;
-                let step = *step_ref;
-                if step < 7 {
-                    Ok(())
-                } else {
-                    Err(CronError::InvalidCronValue)
-                }
-            }
-            CronValue::Value(v_ref) => {
-                let v = *v_ref;
-                if v < 7 {
-                    Ok(())
-                } else {
-                    Err(CronError::InvalidCronValue)
-                }
-            }
-            CronValue::List(l) => l
-                .iter()
-                .map(|v| v.verify_for_day())
-                .fold(Ok(()), |acc, v| if v.is_err() { v } else { acc }),
-            _ => Ok(()),
-        }
-    }
-
-    fn verify(&self) -> Result<()> {
-        match self {
-            CronValue::Range(begin, end) => {
-                if begin < end {
-                    Ok(())
-                } else {
-                    Err(CronError::InvalidCronValue)
-                }
-            }
-            CronValue::Interval(base, _) => base.as_ref().verify(),
-            CronValue::List(l) => l
-                .iter()
-                .map(|v| v.verify())
+                .map(|v| v.verify(min, max))
                 .fold(Ok(()), |acc, v| if v.is_err() { v } else { acc }),
             _ => Ok(()),
         }
@@ -308,21 +266,21 @@ impl CronValue {
 
     pub fn matches(&self, value: u8) -> bool {
         match self {
-            CronValue::Range(begin, end) => *begin <= value && value <= *end,
-            CronValue::Value(v) => *v == value,
+            CronValue::Range(r) => r.start <= value && value <= r.end,
+            CronValue::Value(v) => u8::from(v) == value,
             CronValue::List(cron_values) => cron_values.iter().any(|v| v.matches(value)),
             CronValue::Interval(base, step) => match base.as_ref() {
-                CronValue::All => value % step == 0,
-                CronValue::Range(begin, end) => {
-                    if value < *begin || value > *end {
+                CronValue::All => value % u8::from(step) == 0,
+                CronValue::Range(r) => {
+                    if value < r.start|| value > r.end {
                         return false;
                     }
-                    (value - begin) % step == 0
+                    (value - r.start) % u8::from(step) == 0
                 }
-                CronValue::Value(v) => value == *v && value % step == 0,
+                CronValue::Value(v) => value == u8::from(v) && value % u8::from(step) == 0,
                 CronValue::List(list) => list
                     .iter()
-                    .any(|v| CronValue::Interval(v.clone().into(), *step).matches(value)),
+                    .any(|v| CronValue::Interval(v.clone().into(), step.clone()).matches(value)),
                 _ => false,
             },
             CronValue::All => true,
@@ -331,9 +289,9 @@ impl CronValue {
 
     pub fn min_value(&self) -> Option<u8> {
         match self {
-            CronValue::Value(v) => Some(*v),
-            CronValue::Range(a, _) => Some(*a),
-            CronValue::Interval(base, step) => base.min_value().map(|v| v - (v % step)),
+            CronValue::Value(v) => Some(u8::from(v)),
+            CronValue::Range(r ) => Some(r.start),
+            CronValue::Interval(base, step) => base.min_value().map(|v| v - (v % u8::from(step))),
             CronValue::List(list) => list.iter().filter_map(|v| v.min_value()).min(),
             CronValue::All => Some(0),
         }
@@ -349,20 +307,23 @@ impl CronValue {
     }
 }
 
-pub fn range(bot: u8, top: u8) -> CronValue {
-    CronValue::Range(bot, top)
+pub fn range(r: Range<u8>) -> CronValue {
+    r.into()
 }
 
 pub fn interval<T: Into<CronValue>>(base: T, step: u8) -> CronValue {
-    CronValue::Interval(Box::new(base.into()), step)
+    CronValue::Interval(Box::new(base.into()), step.into())
 }
 
-pub fn every(step: u8) -> CronValue {
-    CronValue::Interval(Box::new(CronValue::All), step)
+pub fn value(value: impl Into<CronValue>) -> CronValue {
+    value.into()
+}
+pub fn every(step: impl Into<ValueKind>) -> CronValue {
+    CronValue::Interval(Box::new(CronValue::All), step.into())
 }
 
 pub fn from(begin: u8, end: u8) -> CronValue {
-    CronValue::Range(begin, end)
+    CronValue::Range(begin..end)
 }
 
 pub fn all() -> CronValue {
@@ -370,5 +331,5 @@ pub fn all() -> CronValue {
 }
 
 pub fn on(value: u8) -> CronValue {
-    CronValue::Value(value)
+    CronValue::Value(value.into())
 }
