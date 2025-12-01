@@ -322,14 +322,75 @@ pub fn every(step: impl Into<ValueKind>) -> CronValue {
     CronValue::Interval(Box::new(CronValue::All), step.into())
 }
 
-pub fn from(begin: u8, end: u8) -> CronValue {
-    CronValue::Range(begin..end)
+pub fn from<T: Into<CronValue>, Y: Into<CronValue>>(begin: T, end: Y) -> FromState {
+    let v: u8 = end.into().into();
+    let end = CronValue::Value(ValueKind::Number(v + 1));
+    FromState { value: begin.into()..end }
 }
 
 pub fn all() -> CronValue {
     CronValue::All
 }
 
-pub fn on(value: u8) -> CronValue {
-    CronValue::Value(value.into())
+pub fn on(value: u8) -> OnState {
+    OnState { value: CronValue::Value(value.into()) }
+}
+
+pub struct OnState {
+    value: CronValue
+}
+
+impl Into<CronValue> for OnState {
+    fn into(self) -> CronValue {
+        self.value
+    }
+}
+
+impl OnState {
+    pub fn or(self, value: u8) -> Self {
+        Self { value: CronValue::List(vec![self.value, value.into()]) }
+    }
+}
+
+pub struct FromState {
+    value: Range<CronValue>
+}
+
+impl FromState {
+    pub fn every(self, value: u8) -> CronValue {
+        let v: u8 = self.value.end.into();
+        let v = CronValue::Value(ValueKind::Number(v + 1));
+        CronValue::Interval(Box::new(CronValue::Range(self.value.start.into()..v.into())), value.into())
+    }
+}
+
+impl From<Weekday> for CronValue {
+    fn from(value: Weekday) -> Self {
+        CronValue::Value(ValueKind::Day(value))
+    }
+}
+
+impl From<Month> for CronValue {
+    fn from(value: Month) -> Self {
+        CronValue::Value(ValueKind::Month(value))
+    }
+}
+
+impl Into<CronValue> for FromState {
+    fn into(self) -> CronValue {
+        CronValue::Range(self.value.start.into()..self.value.end.into())
+    }
+}
+
+impl Into<u8> for CronValue {
+    fn into(self) -> u8 {
+        match self {
+            CronValue::Value(value_kind) => match value_kind {
+                ValueKind::Day(weekday) => weekday as u8,
+                ValueKind::Month(month) => month as u8,
+                ValueKind::Number(v) => v,
+            },
+            _ => unreachable!("Unreachable"),
+        }
+    }
 }

@@ -1,5 +1,7 @@
+use chrono::{Month, Weekday};
+
 use crate::{
-    cron::Cron, task::CronTask, value::{from, interval, on, range}
+    cron::Cron, task::CronTask, value::{from, interval, range}
 };
 
 pub mod cron;
@@ -31,7 +33,9 @@ fn main() {
 
     let t = CronTask::builder()
         .minutes(from(10, 30).every(5))
-        .hour(on(5).and(18))
+        // .hour(on(5).or(18))
+        .week_day(from(Weekday::Mon, Weekday::Fri))
+        .month(from(Month::April, Month::December))
         .build()
         .unwrap();
 
