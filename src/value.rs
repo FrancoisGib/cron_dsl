@@ -45,7 +45,7 @@ impl From<ValueKind> for u8 {
         match value {
             ValueKind::Day(d) => d as u8,
             ValueKind::Month(m) => m as u8,
-            ValueKind::Number(n) => n as u8,
+            ValueKind::Number(n) => n,
         }
     }
 }
@@ -55,7 +55,7 @@ impl From<&ValueKind> for u8 {
         match value {
             ValueKind::Day(d) => *d as u8,
             ValueKind::Month(m) => *m as u8,
-            ValueKind::Number(n) => *n as u8,
+            ValueKind::Number(n) => *n,
         }
     }
 }
@@ -123,7 +123,7 @@ impl Display for CronValue {
                     .join(",");
                 write!(f, "{}", fmt)
             }
-            CronValue::Interval(base, step) => write!(f, "{}/{}", base.as_ref().to_string(), step),
+            CronValue::Interval(base, step) => write!(f, "{}/{}", base.as_ref(), step),
             CronValue::All => write!(f, "*"),
         }
     }
@@ -176,9 +176,11 @@ impl CronValue {
             }
 
             (CronValue::Range(r), CronValue::List(list))
-            | (CronValue::List(list), CronValue::Range(r)) => {
-                CronValue::List(list.into_iter().filter(|v| v.matches_in(r.start, r.end)).collect())
-            }
+            | (CronValue::List(list), CronValue::Range(r)) => CronValue::List(
+                list.into_iter()
+                    .filter(|v| v.matches_in(r.start, r.end))
+                    .collect(),
+            ),
 
             _ => other, // all
         }
@@ -270,14 +272,15 @@ impl CronValue {
             CronValue::Value(v) => u8::from(v) == value,
             CronValue::List(cron_values) => cron_values.iter().any(|v| v.matches(value)),
             CronValue::Interval(base, step) => match base.as_ref() {
-                CronValue::All => value % u8::from(step) == 0,
+                CronValue::All => value.is_multiple_of(u8::from(step)),
                 CronValue::Range(r) => {
-                    if value < r.start|| value > r.end {
+                    if value < r.start || value > r.end {
                         return false;
                     }
-                    (value - r.start) % u8::from(step) == 0
+
+                    (value - r.start).is_multiple_of(u8::from(step))
                 }
-                CronValue::Value(v) => value == u8::from(v) && value % u8::from(step) == 0,
+                CronValue::Value(v) => value == u8::from(v) && value.is_multiple_of(u8::from(step)),
                 CronValue::List(list) => list
                     .iter()
                     .any(|v| CronValue::Interval(v.clone().into(), step.clone()).matches(value)),
@@ -290,7 +293,7 @@ impl CronValue {
     pub fn min_value(&self) -> Option<u8> {
         match self {
             CronValue::Value(v) => Some(u8::from(v)),
-            CronValue::Range(r ) => Some(r.start),
+            CronValue::Range(r) => Some(r.start),
             CronValue::Interval(base, step) => base.min_value().map(|v| v - (v % u8::from(step))),
             CronValue::List(list) => list.iter().filter_map(|v| v.min_value()).min(),
             CronValue::All => Some(0),
@@ -298,12 +301,7 @@ impl CronValue {
     }
 
     pub fn next_value(&self, current: u8, max: u8) -> Option<u8> {
-        for v in current..=max {
-            if self.matches(v) {
-                return Some(v);
-            }
-        }
-        None
+        (current..=max).find(|&v| self.matches(v))
     }
 }
 
