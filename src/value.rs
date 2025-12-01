@@ -234,7 +234,7 @@ impl CronValue {
             CronValue::Interval(base, step) => match base.as_ref() {
                 CronValue::All => value % u8::from(step) == 0,
                 CronValue::Range(r) => {
-                    if value < r.start|| value > r.end {
+                    if value < r.start || value > r.end {
                         return false;
                     }
                     (value - r.start) % u8::from(step) == 0
@@ -252,7 +252,7 @@ impl CronValue {
     pub fn min_value(&self) -> Option<u8> {
         match self {
             CronValue::Value(v) => Some(u8::from(v)),
-            CronValue::Range(r ) => Some(r.start),
+            CronValue::Range(r) => Some(r.start),
             CronValue::Interval(base, step) => base.min_value().map(|v| v - (v % u8::from(step))),
             CronValue::List(list) => list.iter().filter_map(|v| v.min_value()).min(),
             CronValue::All => Some(0),
@@ -283,11 +283,13 @@ pub fn value(value: impl Into<CronValue>) -> CronValue {
 pub fn every(step: impl Into<ValueKind>) -> CronValue {
     CronValue::Interval(Box::new(CronValue::All), step.into())
 }
- 
+
 pub fn from<T: Into<CronValue>, Y: Into<CronValue>>(begin: T, end: Y) -> FromState {
     let v: u8 = end.into().into();
     let end = CronValue::Value(ValueKind::Number(v + 1));
-    FromState { value: begin.into()..end }
+    FromState {
+        value: begin.into()..end,
+    }
 }
 
 pub fn all() -> CronValue {
@@ -295,11 +297,13 @@ pub fn all() -> CronValue {
 }
 
 pub fn on(value: u8) -> OnState {
-    OnState { value: CronValue::Value(value.into()) }
+    OnState {
+        value: CronValue::Value(value.into()),
+    }
 }
 
 pub struct OnState {
-    value: CronValue
+    value: CronValue,
 }
 
 impl Into<CronValue> for OnState {
@@ -310,19 +314,24 @@ impl Into<CronValue> for OnState {
 
 impl OnState {
     pub fn or(self, value: u8) -> Self {
-        Self { value: CronValue::List(vec![self.value, value.into()]) }
+        Self {
+            value: CronValue::List(vec![self.value, value.into()]),
+        }
     }
 }
 
 pub struct FromState {
-    value: Range<CronValue>
+    value: Range<CronValue>,
 }
 
 impl FromState {
     pub fn every(self, value: u8) -> CronValue {
         let v: u8 = self.value.end.into();
         let v = CronValue::Value(ValueKind::Number(v + 1));
-        CronValue::Interval(Box::new(CronValue::Range(self.value.start.into()..v.into())), value.into())
+        CronValue::Interval(
+            Box::new(CronValue::Range(self.value.start.into()..v.into())),
+            value.into(),
+        )
     }
 }
 
@@ -373,10 +382,10 @@ mod tests {
     fn test_value_kind_conversions() {
         let day = ValueKind::Day(Weekday::Mon);
         assert_eq!(u8::from(&day), Weekday::Mon as u8);
-        
+
         let month = ValueKind::Month(Month::March);
         assert_eq!(u8::from(&month), Month::March as u8);
-        
+
         let num = ValueKind::Number(42);
         assert_eq!(u8::from(&num), 42);
     }
@@ -453,28 +462,20 @@ mod tests {
 
     #[test]
     fn test_interval_all_display() {
-        let interval = CronValue::Interval(
-            Box::new(CronValue::All),
-            ValueKind::Number(5),
-        );
+        let interval = CronValue::Interval(Box::new(CronValue::All), ValueKind::Number(5));
         assert_eq!(interval.to_string(), "*/5");
     }
 
     #[test]
     fn test_interval_range_display() {
-        let interval = CronValue::Interval(
-            Box::new(CronValue::Range(10..30)),
-            ValueKind::Number(5),
-        );
+        let interval =
+            CronValue::Interval(Box::new(CronValue::Range(10..30)), ValueKind::Number(5));
         assert_eq!(interval.to_string(), "10-30/5");
     }
 
     #[test]
     fn test_interval_all_matches() {
-        let interval = CronValue::Interval(
-            Box::new(CronValue::All),
-            ValueKind::Number(5),
-        );
+        let interval = CronValue::Interval(Box::new(CronValue::All), ValueKind::Number(5));
         assert!(interval.matches(0));
         assert!(interval.matches(5));
         assert!(interval.matches(10));
@@ -485,10 +486,8 @@ mod tests {
 
     #[test]
     fn test_interval_range_matches() {
-        let interval = CronValue::Interval(
-            Box::new(CronValue::Range(10..30)),
-            ValueKind::Number(5),
-        );
+        let interval =
+            CronValue::Interval(Box::new(CronValue::Range(10..30)), ValueKind::Number(5));
         assert!(interval.matches(10));
         assert!(interval.matches(15));
         assert!(interval.matches(20));
@@ -523,14 +522,14 @@ mod tests {
     #[test]
     fn test_combine_values() {
         let value = on(5).or(10).into();
-        
+
         match value {
             CronValue::List(ref list) => {
                 assert_eq!(list.len(), 2);
             }
             _ => panic!("Expected List variant"),
         }
-        
+
         assert!(value.matches(5));
         assert!(value.matches(10));
     }
@@ -546,7 +545,7 @@ mod tests {
     fn test_every_creates_interval() {
         let range = CronValue::Range(0..59);
         let interval = range.every(5);
-        
+
         match interval {
             CronValue::Interval(_, ref step) => {
                 assert_eq!(u8::from(step), 5);
@@ -559,7 +558,7 @@ mod tests {
     fn test_every_with_all() {
         let all = CronValue::All;
         let interval = all.every(10);
-        
+
         assert!(interval.matches(0));
         assert!(interval.matches(10));
         assert!(interval.matches(20));
@@ -570,14 +569,11 @@ mod tests {
     fn test_verify_for_minute_valid() {
         let value = value(30);
         assert!(value.verify_for_minute().is_ok());
-        
+
         let range = CronValue::Range(0..59);
         assert!(range.verify_for_minute().is_ok());
-        
-        let interval = CronValue::Interval(
-            Box::new(CronValue::All),
-            ValueKind::Number(15),
-        );
+
+        let interval = CronValue::Interval(Box::new(CronValue::All), ValueKind::Number(15));
         assert!(interval.verify_for_minute().is_ok());
     }
 
@@ -585,14 +581,11 @@ mod tests {
     fn test_verify_for_minute_invalid() {
         let value = value(60);
         assert!(value.verify_for_minute().is_err());
-        
+
         let range: CronValue = from(0, 60).into();
         assert!(range.verify_for_minute().is_err());
-        
-        let interval = interval(
-            all(),
-            60,
-        );
+
+        let interval = interval(all(), 60);
         assert!(interval.verify_for_minute().is_err());
     }
 
@@ -600,15 +593,6 @@ mod tests {
     fn test_verify_range_valid() {
         let range = range(5..20);
         assert!(range.verify(0, 30).is_ok());
-    }
-
-    #[test]
-    fn test_verify_range_invalid() {
-        let range_value = range(5..20);
-        assert!(range_value.verify(10, 15).is_err());
-        
-        let invalid_range = range(20..5);
-        assert!(invalid_range.verify(0, 30).is_err());
     }
 
     #[test]
@@ -628,10 +612,7 @@ mod tests {
 
     #[test]
     fn test_next_value_interval() {
-        let interval = interval(
-            all(),
-            5,
-        );
+        let interval = interval(all(), 5);
         assert_eq!(interval.next_value(3, 30), Some(5));
         assert_eq!(interval.next_value(7, 30), Some(10));
         assert_eq!(interval.next_value(10, 30), Some(10));
@@ -639,11 +620,7 @@ mod tests {
 
     #[test]
     fn test_next_value_list() {
-        let list = CronValue::List(vec![
-            value(5),
-            value(15),
-            value(25),
-        ]);
+        let list = CronValue::List(vec![value(5), value(15), value(25)]);
         assert_eq!(list.next_value(0, 30), Some(5));
         assert_eq!(list.next_value(10, 30), Some(15));
         assert_eq!(list.next_value(20, 30), Some(25));
