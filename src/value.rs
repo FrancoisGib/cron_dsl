@@ -167,7 +167,7 @@ impl CronValue {
                 } else {
                     Err(CronError::InvalidCronValue)
                 }
-            },
+            }
             CronValue::Value(v) => {
                 let v: u8 = v.into();
 
@@ -194,6 +194,6 @@ pub fn interval<T: Into<CronValue>>(base: T, step: u8) -> CronValue {
     CronValue::Interval(Box::new(base.into()), step.into())
 }
 
-pub fn value(value: u8) -> CronValue {
+pub fn value(value: impl Into<CronValue>) -> CronValue {
     value.into()
 }
