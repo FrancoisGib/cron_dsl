@@ -1,7 +1,5 @@
 use crate::{
-    cron::Cron, task::CronTask, value::{interval, range}
-    task::CronTask,
-    value::{from, interval, on, range},
+    cron::Cron, task::CronTask, value::{from, interval, on, range}
 };
 
 pub mod cron;
@@ -36,8 +34,8 @@ fn main() {
         .hour(on(5).and(18))
         .build()
         .unwrap();
-    println!("{}", t);
 
+    println!("{}", t);
     println!("next {}", t.next_occurrence());
 
     // let local_time = Local::now();
